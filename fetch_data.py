@@ -1,9 +1,8 @@
-import hashlib
-from typing import Generic, Optional, TypeVar, TypedDict
-import typing
 import asyncio
-from aiohttp.client import ClientSession
 from attr import dataclass
+import hashlib
+from typing import Generic, Optional, TypeVar, TypedDict, Dict, Tuple
+from aiohttp.client import ClientSession
 import aiohttp
 from ruuvi_decoders import get_decoder
 
@@ -22,7 +21,7 @@ class PayloadData(TypedDict):
     coordinates: any
     timestamp: str
     gw_mac: str
-    tags: typing.Dict[str, SensorPayload]
+    tags: Dict[str, SensorPayload]
 
 
 class Payload(TypedDict):
@@ -46,7 +45,7 @@ class SensorData(TypedDict):
     rssi: Optional[int]
 
 
-ParsedDatas = typing.Dict[str, SensorData]
+ParsedDatas = Dict[str, SensorData]
 
 T = TypeVar('T')
 
@@ -68,7 +67,7 @@ class Err(Result):
     ok: bool = False
 
 
-def _parse_sensor_payload(mac: str, payload: SensorPayload) -> typing.Tuple[str, SensorData]:
+def _parse_sensor_payload(mac: str, payload: SensorPayload) -> Tuple[str, SensorData]:
     raw = payload["data"]
 
     try:
@@ -98,13 +97,13 @@ def _parse_received_data(payload: Payload) -> ParsedDatas:
     return dict(sensor_datas)
 
 
-def _parse_value_from_header(header: str, key: str):
+def _parse_value_from_header(header: str, key: str) -> str:
     ch_start = header.index(key) + len(key) + 2
     ch_end = header.index("\"", ch_start + 1)
     return header[ch_start:ch_end]
 
 
-def _parse_password(header: str, username: str, password: str):
+def _parse_password(header: str, username: str, password: str) -> str:
     challenge = _parse_value_from_header(header, "challenge")
     realm = _parse_value_from_header(header, "realm")
     password_md5 = hashlib.md5(
@@ -114,13 +113,13 @@ def _parse_password(header: str, username: str, password: str):
     return password_sha256
 
 
-def _parse_session_cookie(header: str):
+def _parse_session_cookie(header: str) -> Dict[str, str]:
     session_cookie = _parse_value_from_header(header, "session_cookie")
     session_id = _parse_value_from_header(header, "session_id")
     return {session_cookie: session_id}
 
 
-async def get_auth_info(session: ClientSession, ip, cookies={}):
+async def get_auth_info(session: ClientSession, ip: str, cookies: Dict[str, str] = {}) -> Result[str]:
     async with session.get(f'http://{ip}/auth', cookies=cookies) as response:
         if response.status == 401:
             auth_info = response.headers["WWW-Authenticate"]
@@ -128,14 +127,14 @@ async def get_auth_info(session: ClientSession, ip, cookies={}):
         return Err()
 
 
-async def authorize_user(session: ClientSession, ip, cookies, username, password_encrypted):
+async def authorize_user(session: ClientSession, ip: str, cookies, username: str, password_encrypted: str) -> Result:
     auth_payload = '{"login":"' + username + \
         '","password":"' + password_encrypted + '"}'
     async with session.post(f'http://{ip}/auth', data=auth_payload, cookies=cookies) as response:
         return Result(None, response.status, response.status == 200)
 
 
-async def get_data(session, ip, cookies={}) -> Result[Optional[ParsedDatas]]:
+async def get_data(session: ClientSession, ip: str, cookies: Dict[str, str] = {}) -> Result[Optional[ParsedDatas]]:
     try:
         async with session.get(f'http://{ip}/history?time=30', cookies=cookies) as response:
             if response.status == 200:
@@ -151,7 +150,7 @@ async def get_data(session, ip, cookies={}) -> Result[Optional[ParsedDatas]]:
         return Err(None, 500)
 
 
-async def get_authenticate_cookies(session, ip, username, password):
+async def get_authenticate_cookies(session: ClientSession, ip: str, username: str, password: str) -> Result[Dict[str, str]]:
     auth_info_result = await get_auth_info(session, ip)
     if not auth_info_result.ok:
         return Err()
@@ -164,7 +163,7 @@ async def get_authenticate_cookies(session, ip, username, password):
     return Ok(cookies)
 
 
-async def fetch_data(ip, username, password) -> Result[Optional[ParsedDatas]]:
+async def fetch_data(ip: str, username: str, password: str) -> Result[Optional[ParsedDatas]]:
     async with aiohttp.ClientSession() as session:
         get_result = await get_data(session, ip)
         if get_result.ok:
