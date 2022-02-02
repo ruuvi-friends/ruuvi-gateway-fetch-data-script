@@ -144,7 +144,7 @@ async def get_authenticate_cookies(session: ClientSession, ip: str, username: st
     return Ok(cookies)
 
 
-async def fetch_data(ip: str, username: str, password: str) -> Result[ParsedDatas, None]:
+async def fetch_data(ip: str, username: str, password: str) -> Result[ParsedDatas, str]:
     async with aiohttp.ClientSession() as session:
         get_result = await get_data(session, ip)
         if get_result.is_ok():
@@ -160,7 +160,7 @@ async def fetch_data(ip: str, username: str, password: str) -> Result[ParsedData
         if get_result.is_ok():
             return Ok(get_result.value)
         else:
-            return Err(f'Fetch failed after authorization - {get_result.value}')
+            return Err(f'Fetch failed after authentication - {get_result.value}')
 
 
 async def main():
